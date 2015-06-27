@@ -187,55 +187,76 @@ end
 EventMachine.kqueue = true if EventMachine.kqueue?
 
 EM.run {
-  LOGGER.info "Connecting to #{CLIENT_URL}"
-  ws = Faye::WebSocket::Client.new(CLIENT_URL)
-  services_changing = []
-  services_changed = false
-  timer = EventMachine::Timer.new(0)
+  @services_changing = []
+  @services_changed = false
+  @timer = EventMachine::Timer.new(0)
 
-  ws.on :open do |event|
+  def init_nginx_config
     LOGGER.info 'Init Nginx config'
-
     HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
-
-    EventMachine.watch_file(ENV['NGINX_DEFAULT_CONF'], NginxConfHandler)
   end
 
-  ws.on :message do |event|
-    data = JSON.parse(event.data)
+  def connection
+    LOGGER.info "Connecting to #{CLIENT_URL}"
+    ws = Faye::WebSocket::Client.new(CLIENT_URL, nil, ping: 240)
 
-    if data['type'] == 'service'
-
-      case data['state']
-      when 'Scaling', 'Redeploying', 'Stopping', 'Starting', 'Terminating'
-        LOGGER.info "Service: #{data['uuid']} is #{data['state']}..."
-        timer.cancel # cancel any conf writes
-        services_changing << data['uuid']
-      when 'Running', 'Stopped', 'Not running', 'Terminated'
-        if services_changing.count > 0
-          LOGGER.info "Service: #{data['uuid']} is #{data['state']}!"
-          services_changing.shift
-          timer.cancel # cancel any conf writes
-          services_changed = true
-        end
+    ws.on :open do |event|
+      LOGGER.info "Connected!"
+      if @services_changing.count > 0
+        @services_changing = []
+        @services_changed = false
+        @timer.cancel
+        @timer = EventMachine::Timer.new(0)
+        init_nginx_config
       end
-
-      if services_changed && services_changing == []
-        LOGGER.info "Services changed - Rewrite Nginx config"
-        services_changed = false
-        timer.cancel
-        timer = EventMachine::Timer.new(5) do
-          HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
-        end
-      end
-
     end
+
+    ws.on :message do |event|
+      data = JSON.parse(event.data)
+
+      if data['type'] == 'service'
+
+        case data['state']
+        when 'Scaling', 'Redeploying', 'Stopping', 'Starting', 'Terminating'
+          LOGGER.info "Service: #{data['uuid']} is #{data['state']}..."
+          @timer.cancel # cancel any conf writes
+          @services_changing << data['uuid']
+        when 'Running', 'Stopped', 'Not running', 'Terminated'
+          if @services_changing.count > 0
+            LOGGER.info "Service: #{data['uuid']} is #{data['state']}!"
+            @services_changing.shift
+            @timer.cancel # cancel any conf writes
+            @services_changed = true
+          end
+        end
+
+        if @services_changed && @services_changing == []
+          LOGGER.info "Services changed - Rewrite Nginx config"
+          @services_changed = false
+          @timer.cancel
+          @timer = EventMachine::Timer.new(5) do
+            HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
+          end
+        end
+
+      end
+    end
+
+    ws.on(:error) do |event|
+      LOGGER.info JSON.parse(event.data).inspect
+    end
+
+    ws.on(:close) do |event|
+      LOGGER.info "Connection closed! ... Restart Connection"
+      # restart the connection
+      connection
+    end
+
   end
 
-  ws.on(:error) do |event|
-    LOGGER.info JSON.parse(event.data).inspect
-  end
-
+  init_nginx_config
+  EventMachine.watch_file(ENV['NGINX_DEFAULT_CONF'], NginxConfHandler)
+  connection
 
 }
