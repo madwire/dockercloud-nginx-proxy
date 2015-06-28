@@ -11,6 +11,8 @@ if !ENV['TUTUM_AUTH']
   exit 1
 end
 
+MY_NODE = ENV['TUTUM_NODE_HOSTNAME']
+
 $stdout.sync = true
 CLIENT_URL = URI.escape("wss://stream.tutum.co/v1/events?auth=#{ENV['TUTUM_AUTH']}")
 
@@ -43,7 +45,11 @@ class NginxConf
 
   def write(services, file)
     @services = services
-    LOGGER.info @services.map {|s| s.container_ips}.inspect
+
+    @services.each do |service|
+      LOGGER.info service.name + ': ' + service.container_ips.inspect
+    end
+
     result = @renderer.result(binding) #rescue nil
     if result
       File.open(file, "w+") do |f|
@@ -75,6 +81,10 @@ class Container
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
   end
 
+  def node
+    attributes['container_envvars'].find {|e| e['key'] == 'TUTUM_NODE_HOSTNAME'}['value']
+  end
+
   def running?
     ['Starting', 'Running'].include?(attributes['state'])
   end
@@ -98,7 +108,11 @@ class Service
   end
 
   def container_ips
-    @container_ips ||= containers.map {|c| c.ip if running? }.sort
+    @container_ips ||= containers.select {
+        |c| running? && MY_NODE == c.node
+    }.map {
+        |c| c.ip
+    }.sort
   end
 
   def http?
