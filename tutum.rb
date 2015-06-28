@@ -11,7 +11,17 @@ if !ENV['TUTUM_AUTH']
   exit 1
 end
 
-MY_NODE = ENV['TUTUM_NODE_HOSTNAME']
+case ENV['RESTRICT_MODE']
+  when 'node'
+    RESTRICT_MODE = :node
+  when 'region'
+    RESTRICT_MODE = :region
+  else
+    RESTRICT_MODE = :none
+end
+
+# Retrieve the node's fqdn. For 'own nodes' this is an empty string.
+MY_NODE = ENV['TUTUM_NODE_FQDN']
 
 $stdout.sync = true
 CLIENT_URL = URI.escape("wss://stream.tutum.co/v1/events?auth=#{ENV['TUTUM_AUTH']}")
@@ -82,7 +92,7 @@ class Container
   end
 
   def node
-    attributes['container_envvars'].find {|e| e['key'] == 'TUTUM_NODE_HOSTNAME'}['value']
+    attributes['container_envvars'].find {|e| e['key'] == 'TUTUM_NODE_FQDN'}['value']
   end
 
   def running?
@@ -93,10 +103,11 @@ end
 
 class Service
   attr_reader :id, :attributes, :session
-  def initialize(attributes, session)
+  def initialize(attributes, session, region_map)
     @id = attributes['uuid']
     @attributes = attributes
     @session = session
+    @region_map = region_map
   end
 
   def name
@@ -109,7 +120,14 @@ class Service
 
   def container_ips
     @container_ips ||= containers.select {
-        |c| running? && MY_NODE == c.node
+        |c| case RESTRICT_MODE
+              when :node
+                running? && MY_NODE == c.node
+              when :region
+                running? && @region_map[MY_NODE] == @region_map[c.node]
+              else
+                running?
+        end
     }.map {
         |c| c.ip
     }.sort
@@ -160,6 +178,7 @@ class HttpServices
   attr_reader :session
   def initialize(tutum_auth)
     @session = Tutum.new(tutum_auth: tutum_auth)
+    @region_map = get_region_map
     @services = get_services
   end
 
@@ -183,7 +202,19 @@ class HttpServices
   end
 
   def services_list(filters = {})
-    session.services.list(filters)['objects'].map {|data| Service.new(data, session) }
+    session.services.list(filters)['objects'].map {|data| Service.new(data, session, @region_map) }
+  end
+
+  def get_nodes(filters = {})
+    session.nodes.list(filters)['objects']
+  end
+
+  def get_region_map
+    get_nodes.map {
+        |node| { node['external_fqdn'] => node['region'] }
+    }.reduce({}) {
+        |h,pairs| pairs.each {|k,v| h[k] = v }; h
+    }
   end
 
 end
@@ -207,6 +238,7 @@ EM.run {
 
   def init_nginx_config
     LOGGER.info 'Init Nginx config'
+    LOGGER.info 'Restriction mode: ' + RESTRICT_MODE.to_s
     HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
   end
