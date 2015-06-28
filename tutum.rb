@@ -20,7 +20,7 @@ case ENV['RESTRICT_MODE']
     RESTRICT_MODE = :none
 end
 
-# Retrieve the node's fqdn. For 'own nodes' this is an empty string.
+# Retrieve the node's fqdn.
 MY_NODE = ENV['TUTUM_NODE_FQDN']
 
 $stdout.sync = true
@@ -211,6 +211,7 @@ class HttpServices
 
   def get_region_map
     get_nodes.map {
+        # Map the fqdn to the region. For 'own nodes', region is nil.
         |node| { node['external_fqdn'] => node['region'] }
     }.reduce({}) {
         |h,pairs| pairs.each {|k,v| h[k] = v }; h
