@@ -189,12 +189,25 @@ EventMachine.kqueue = true if EventMachine.kqueue?
 EM.run {
   @services_changing = []
   @services_changed = false
+  @shutting_down = false
   @timer = EventMachine::Timer.new(0)
 
   def init_nginx_config
     LOGGER.info 'Init Nginx config'
     HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
+  end
+
+  def signal_handler(signal)
+    # In rare cases the signal comes multiple times. If we're already shutting down ignore this.
+    unless @shutting_down
+      # We can't use the logger inside a trap, stdout must be enough.
+      puts "Signal #{signal} received. Shutting down."
+
+      @shutting_down = true
+
+      EventMachine.stop
+    end
   end
 
   def connection
@@ -248,15 +261,21 @@ EM.run {
     end
 
     ws.on(:close) do |event|
-      LOGGER.info "Connection closed! ... Restart Connection"
-      # restart the connection
-      connection
+      unless @shutting_down
+        LOGGER.info 'Connection closed! ... Restarting connection'
+
+        # restart the connection
+        connection
+      else
+        LOGGER.info 'Connection closed!'
+      end
     end
 
   end
 
   init_nginx_config
+  Signal.trap('INT')  { signal_handler('INT') }
+  Signal.trap('TERM') { signal_handler('TERM') }
   EventMachine.watch_file(ENV['NGINX_DEFAULT_CONF'], NginxConfHandler)
   connection
-
 }
