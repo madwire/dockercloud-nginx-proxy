@@ -38,11 +38,10 @@ server {
 }
 
 <% @services.each do |service| %>
-<% next if service.container_ips.nil? %>
 <% if service.host %>
 upstream <%= service.name %> {
-  <% service.container_ips.each do |ip| %>
-  server <%= ip %>:80;
+  <% service.containers.each do |container| %>
+  server <%= container.ip%>:80;
   <% end %>
 }
 
