@@ -110,18 +110,13 @@ class Service
   end
 
   def container_ips
-    @container_ips ||= containers.select {
-        |c| case RESTRICT_MODE
-              when :node
-                running? && MY_NODE == c.node
-              when :region
-                running? && @region_map[MY_NODE] == @region_map[c.node]
-              else
-                running?
-        end
-    }.map {
-        |c| c.ip
-    }.sort
+    @container_ips ||= containers.map {|c| c.ip if running? }.sort
+  end
+
+  def include?(mode, mode_options = {})
+    @mode, @mode_options = mode, mode_options
+    reload!
+    http? && running? && containers?
   end
 
   def http?
@@ -138,23 +133,41 @@ class Service
 
   def running?
     @state ||= begin
-      reload!
       ['Running', 'Partly running'].include?(attributes['state'])
     end
   end
 
+  def containers?
+    containers.count > 0
+  end
+
   def containers
     @containers ||= begin
-      reload!
       attributes['containers'].map do |container_url|
         id = container_url.split("/").last
-        Container.new(session.containers.get(id))
-      end
+        container = Container.new(session.containers.get(id))
+        if include_container? container
+          container
+        else
+          nil
+        end
+      end.compact
     end
   end
 
   def reload!
     @attributes = session.services.get(id)
+  end
+
+  def include_container?(container)
+    case @mode
+    when :node
+      @mode_options[:node] == container.node
+    when :region
+      @mode_options[:region_map][@mode_options[:node]] == @mode_options[:region_map][container.node]
+    else
+      true
+    end
   end
 
 end
