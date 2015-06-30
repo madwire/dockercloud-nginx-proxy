@@ -95,11 +95,10 @@ end
 
 class Service
   attr_reader :id, :attributes, :session
-  def initialize(attributes, session, region_map)
+  def initialize(attributes, session)
     @id = attributes['uuid']
     @attributes = attributes
     @session = session
-    @region_map = region_map
   end
 
   def name
@@ -167,8 +166,8 @@ class HttpServices
     EventMachine.system("nginx -s reload")
   end
 
-  attr_reader :session
-  def initialize(tutum_auth)
+  attr_reader :session, :mode, :node
+  def initialize(tutum_auth, mode = :none, node = nil)
     @session = Tutum.new(tutum_auth: tutum_auth)
     @region_map = get_region_map
     @services = get_services
@@ -186,7 +185,7 @@ class HttpServices
   def get_services
     services = []
     services_list.each do |service|
-      if service.http? && service.running?
+      if service.include? mode, node: node, region_map: region_map
         services << service
       end
     end
@@ -194,7 +193,7 @@ class HttpServices
   end
 
   def services_list(filters = {})
-    session.services.list(filters)['objects'].map {|data| Service.new(data, session, @region_map) }
+    session.services.list(filters)['objects'].map {|data| Service.new(data, session) }
   end
 
   def get_nodes(filters = {})
@@ -232,7 +231,7 @@ EM.run {
   def init_nginx_config
     LOGGER.info 'Init Nginx config'
     LOGGER.info 'Restriction mode: ' + RESTRICT_MODE.to_s
-    HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
+    HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
   end
 
@@ -275,7 +274,7 @@ EM.run {
           @services_changed = false
           @timer.cancel
           @timer = EventMachine::Timer.new(5) do
-            HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
+            HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
           end
         end
 
