@@ -11,17 +11,9 @@ if !ENV['TUTUM_AUTH']
   exit 1
 end
 
-case ENV['RESTRICT_MODE']
-  when 'node'
-    RESTRICT_MODE = :node
-  when 'region'
-    RESTRICT_MODE = :region
-  else
-    RESTRICT_MODE = :none
-end
-
+RESTRICT_MODE = (ENV['RESTRICT_MODE'] || :none).to_sym
 # Retrieve the node's fqdn.
-MY_NODE = ENV['TUTUM_NODE_FQDN']
+THIS_NODE = ENV['TUTUM_NODE_FQDN']
 
 $stdout.sync = true
 CLIENT_URL = URI.escape("wss://stream.tutum.co/v1/events?auth=#{ENV['TUTUM_AUTH']}")
