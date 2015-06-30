@@ -169,7 +169,8 @@ class HttpServices
   attr_reader :session, :mode, :node
   def initialize(tutum_auth, mode = :none, node = nil)
     @session = Tutum.new(tutum_auth: tutum_auth)
-    @region_map = get_region_map
+    @mode = mode
+    @node = node
     @services = get_services
   end
 
@@ -200,13 +201,19 @@ class HttpServices
     session.nodes.list(filters)['objects']
   end
 
-  def get_region_map
-    get_nodes.map {
-        # Map the fqdn to the region. For 'own nodes', region is nil.
-        |node| { node['external_fqdn'] => node['region'] }
-    }.reduce({}) {
-        |h,pairs| pairs.each {|k,v| h[k] = v }; h
-    }
+  def region_map
+    @region_map ||= begin
+      if mode == :region
+        get_nodes.map {
+            # Map the fqdn to the region. For 'own nodes', region is nil.
+            |node| { node['external_fqdn'] => node['region'] }
+        }.reduce({}) {
+            |h,pairs| pairs.each {|k,v| h[k] = v }; h
+        }
+      else
+        {}
+      end
+    end
   end
 
 end
