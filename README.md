@@ -16,6 +16,9 @@ These are the environment variables you add to web services you want to load-bal
 
 - VIRTUAL_HOST: Domain host name, leave a space for multiple domains. e.g. `www.example.com example.com`
 - FORCE_SSL: Optional. This will use a self-signed cert and redirect traffic to https, its perfect when married to external services like [cloudflare](https://www.cloudflare.com/)
+
+These are the environment variables you can add to the load-balance:
+
 - RESTRICT_MODE: Optional. Restricts upstream containers. You have the choice between the following modes:
     - **node**: Only use containers that are on the same node as upstream.
     - **region**: Only use containers that are in the same region as upstream. e.g. "digitalocean frankfurt 1"
