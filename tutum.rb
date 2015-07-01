@@ -11,6 +11,10 @@ if !ENV['TUTUM_AUTH']
   exit 1
 end
 
+RESTRICT_MODE = (ENV['RESTRICT_MODE'] || :none).to_sym
+# Retrieve the node's fqdn.
+THIS_NODE = ENV['TUTUM_NODE_FQDN']
+
 $stdout.sync = true
 CLIENT_URL = URI.escape("wss://stream.tutum.co/v1/events?auth=#{ENV['TUTUM_AUTH']}")
 
@@ -43,7 +47,11 @@ class NginxConf
 
   def write(services, file)
     @services = services
-    LOGGER.info @services.map {|s| s.container_ips}.inspect
+
+    @services.each do |service|
+      LOGGER.info service.name + ': ' + service.container_ips.inspect
+    end
+
     result = @renderer.result(binding) #rescue nil
     if result
       File.open(file, "w+") do |f|
@@ -75,6 +83,10 @@ class Container
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
   end
 
+  def node
+    attributes['container_envvars'].find {|e| e['key'] == 'TUTUM_NODE_FQDN'}['value']
+  end
+
   def running?
     ['Starting', 'Running'].include?(attributes['state'])
   end
@@ -101,6 +113,12 @@ class Service
     @container_ips ||= containers.map {|c| c.ip if running? }.sort
   end
 
+  def include?(mode, mode_options = {})
+    @mode, @mode_options = mode, mode_options
+    reload!
+    http? && running? && containers?
+  end
+
   def http?
     (port_types & ['http', 'https']).count > 0
   end
@@ -115,23 +133,41 @@ class Service
 
   def running?
     @state ||= begin
-      reload!
       ['Running', 'Partly running'].include?(attributes['state'])
     end
   end
 
+  def containers?
+    containers.count > 0
+  end
+
   def containers
     @containers ||= begin
-      reload!
       attributes['containers'].map do |container_url|
         id = container_url.split("/").last
-        Container.new(session.containers.get(id))
-      end
+        container = Container.new(session.containers.get(id))
+        if include_container? container
+          container
+        else
+          nil
+        end
+      end.compact
     end
   end
 
   def reload!
     @attributes = session.services.get(id)
+  end
+
+  def include_container?(container)
+    case @mode
+    when :node
+      @mode_options[:node] == container.node
+    when :region
+      @mode_options[:region_map][@mode_options[:node]] == @mode_options[:region_map][container.node]
+    else
+      true
+    end
   end
 
 end
@@ -143,9 +179,11 @@ class HttpServices
     EventMachine.system("nginx -s reload")
   end
 
-  attr_reader :session
-  def initialize(tutum_auth)
+  attr_reader :session, :mode, :node
+  def initialize(tutum_auth, mode = :none, node = nil)
     @session = Tutum.new(tutum_auth: tutum_auth)
+    @mode = mode
+    @node = node
     @services = get_services
   end
 
@@ -161,7 +199,7 @@ class HttpServices
   def get_services
     services = []
     services_list.each do |service|
-      if service.http? && service.running?
+      if service.include? mode, node: node, region_map: region_map
         services << service
       end
     end
@@ -170,6 +208,25 @@ class HttpServices
 
   def services_list(filters = {})
     session.services.list(filters)['objects'].map {|data| Service.new(data, session) }
+  end
+
+  def get_nodes(filters = {})
+    session.nodes.list(filters)['objects']
+  end
+
+  def region_map
+    @region_map ||= begin
+      if mode == :region
+        get_nodes.map {
+            # Map the fqdn to the region. For 'own nodes', region is nil.
+            |node| { node['external_fqdn'] => node['region'] }
+        }.reduce({}) {
+            |h,pairs| pairs.each {|k,v| h[k] = v }; h
+        }
+      else
+        {}
+      end
+    end
   end
 
 end
@@ -194,7 +251,8 @@ EM.run {
 
   def init_nginx_config
     LOGGER.info 'Init Nginx config'
-    HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
+    LOGGER.info 'Restriction mode: ' + RESTRICT_MODE.to_s
+    HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
   end
 
@@ -249,7 +307,7 @@ EM.run {
           @services_changed = false
           @timer.cancel
           @timer = EventMachine::Timer.new(5) do
-            HttpServices.new(ENV['TUTUM_AUTH']).write_conf(ENV['NGINX_DEFAULT_CONF'])
+            HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
           end
         end
 
