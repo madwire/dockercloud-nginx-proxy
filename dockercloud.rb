@@ -6,33 +6,25 @@ require 'erb'
 require 'logger'
 require 'uri'
 
-if !ENV['TUTUM_AUTH']
-  puts "Nginx doesn't have access to Tutum API - you might want to give an API role to this service for automatic backend reconfiguration"
+if !ENV['DOCKERCLOUD_AUTH']
+  puts "Nginx doesn't have access to Docker Cloud API - you might want to give an API role to this service for automatic backend reconfiguration"
   exit 1
 end
 
 RESTRICT_MODE = (ENV['RESTRICT_MODE'] || :none).to_sym
 # Retrieve the node's fqdn.
-THIS_NODE = ENV['TUTUM_NODE_FQDN']
+THIS_NODE = ENV['DOCKERCLOUD_NODE_FQDN']
 
 $stdout.sync = true
-CLIENT_URL = URI.escape("wss://stream.tutum.co/v1/events?auth=#{ENV['TUTUM_AUTH']}")
+CLIENT_URL = URI.escape("wss://ws.cloud.docker.com/api/audit/v1/events")
 
 LOGGER = Logger.new($stdout)
 LOGGER.level = Logger::INFO
 
 # PATCH
-class Tutum
-  attr_reader :tutum_auth
-  def initialize(options = {})
-    @tutum_auth = options[:tutum_auth]
-  end
-  def headers
-    {
-      'Authorization' => @tutum_auth,
-      'Accept' => 'application/json',
-      'Content-Type' => 'application/json'
-    }
+class TutumApi
+  def url(path)
+    'https://cloud.docker.com/api/app/v1' + path
   end
 end
 
@@ -84,7 +76,7 @@ class Container
   end
 
   def node
-    attributes['container_envvars'].find {|e| e['key'] == 'TUTUM_NODE_FQDN'}['value']
+    attributes['container_envvars'].find {|e| e['key'] == 'DOCKERCLOUD_NODE_FQDN'}['value']
   end
 
   def running?
@@ -252,7 +244,7 @@ EM.run {
   def init_nginx_config
     LOGGER.info 'Init Nginx config'
     LOGGER.info 'Restriction mode: ' + RESTRICT_MODE.to_s
-    HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
+    HttpServices.new(ENV['DOCKERCLOUD_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
     HttpServices.reload!
   end
 
@@ -270,7 +262,7 @@ EM.run {
 
   def connection
     LOGGER.info "Connecting to #{CLIENT_URL}"
-    ws = Faye::WebSocket::Client.new(CLIENT_URL, nil, ping: 240)
+    ws = Faye::WebSocket::Client.new(CLIENT_URL, nil, ping: 240, headers: { 'Authorization' => ENV['DOCKERCLOUD_AUTH']})
 
     ws.on :open do |event|
       LOGGER.info "Connected!"
@@ -307,7 +299,7 @@ EM.run {
           @services_changed = false
           @timer.cancel
           @timer = EventMachine::Timer.new(5) do
-            HttpServices.new(ENV['TUTUM_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
+            HttpServices.new(ENV['DOCKERCLOUD_AUTH'], RESTRICT_MODE, THIS_NODE).write_conf(ENV['NGINX_DEFAULT_CONF'])
           end
         end
 

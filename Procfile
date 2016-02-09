@@ -1,2 +1,2 @@
 nginx: nginx
-tutum: ruby tutum.rb
+dockercloud: ruby dockercloud.rb
