@@ -1,6 +1,6 @@
 FROM debian:jessie
 
-MAINTAINER 3Blades <contact@3blades.io>
+MAINTAINER Greg Werner <werner.greg@gmail.com>
 
 # Install wget and install/updates certificates
 RUN apt-get update \
