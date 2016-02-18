@@ -2,10 +2,8 @@
 
 user  nginx;                                                                    
 worker_processes  1;
-error_log  /var/log/nginx/error.log warn;                                       
-pid        /var/run/nginx.pid;                                                  
-                                                                                
-                                                                                
+error_log  /var/nginx/error.log warn;                                                                                      
+                                                                                                                                                             
 events {                                                                        
     worker_connections  1024;                                                   
 }                                                                               
@@ -13,14 +11,14 @@ events {
                                                                                 
 http {                                                                          
     server_names_hash_bucket_size 128;                                          
-    include       /etc/nginx/mime.types;                                        
+    # include       $NGINX_PREFIX/mime.types;                                        
     default_type  application/octet-stream;                                     
                                                                                 
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '   
                       '$status $body_bytes_sent "$http_referer" '               
                       '"$http_user_agent" "$http_x_forwarded_for"';             
                                                                                 
-    access_log  /var/log/nginx/access.log  main;                                
+    access_log  /var/nginx/access.log  main;                                
                                                                                 
     sendfile        on;                                                         
     #tcp_nopush     on;                                                         
@@ -49,8 +47,7 @@ log_format vhost '$host $remote_addr - $remote_user [$time_local] '
                  '"$request" $status $body_bytes_sent '
                  '"$http_referer" "$http_user_agent"';
 
-access_log /proc/self/fd/1 vhost;
-error_log /proc/self/fd/2;
+access_log /var/nginx/access.log vhost;
 
 # HTTP 1.1 support
 proxy_http_version 1.1;
@@ -94,8 +91,8 @@ server {
 	ssl_session_timeout 5m;
 	ssl_session_cache shared:SSL:50m;
 
-	ssl_certificate /etc/nginx/certs/default.crt;
-	ssl_certificate_key /etc/nginx/certs/default.key;
+	ssl_certificate $NGINX_PREFIX/certs/default.crt;
+	ssl_certificate_key $NGINX_PREFIX/certs/default.key;
 
 	add_header Strict-Transport-Security "max-age=31536000";
 

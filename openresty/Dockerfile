@@ -1,16 +1,22 @@
 FROM debian:jessie
 
+MAINTAINER 3Blades <contact@3blades.io>
+
 # Install wget and install/updates certificates
 RUN apt-get update \
  && apt-get install -y -q --no-install-recommends \
     ca-certificates \
     curl \
     build-essential \
+    git \
     libncurses5-dev \
     libpcre3-dev \
     libreadline-dev \
     libssl-dev \
+    locate \
+    luajit-5.1-dev \
     make \
+    nano \
     openssl \
     perl \
     procps \
@@ -62,29 +68,24 @@ RUN cd /root \
  && ln -sf $OPENRESTY_PREFIX/luajit/bin/luajit-* /usr/local/bin/lua \
  && rm -rf /root/ngx_openresty*
 
-# Configure Nginx and apply fix for very long server names
-RUN echo "daemon off;" >> $NGINX_PREFIX/nginx.conf \
- && sed -i 's/^http {/&\n    server_names_hash_bucket_size 128;/g' $NGINX_PREFIX/nginx.conf
-
 # Install Forego
 RUN wget -P /usr/local/bin https://godist.herokuapp.com/projects/ddollar/forego/releases/current/linux-amd64/forego \
  && chmod u+x /usr/local/bin/forego
 
 # Install App dependancies
-RUN gem install faye-websocket --no-ri --no-rdoc \
- && gem install tutum --no-ri --no-rdoc
+RUN gem install faye-websocket --no-ri --no-rdoc && gem install tutum --no-ri --no-rdoc
 
 COPY . /app/
 WORKDIR /app/
 
 # After OpenResty install, make sure nginx is available in PATH
-ENV PATH /opt/openresty/nginx/sbin:$PATH
+ENV PATH $NGINX_PREFIX/sbin:$PATH
 
 # Generate Default Self-signed certificate
 
 ENV C US
-ENV ST MyState
-ENV L MyCity
+ENV ST GA
+ENV L Atlanta
 ENV OU RandD
 ENV O MyCompany
 ENV CN www.mydomain.com
@@ -97,5 +98,10 @@ RUN openssl genrsa -des3 -passout pass:x -out default.pass.key 2048 \
  && mkdir -p $NGINX_PREFIX/certs/ \
  && mv default.crt $NGINX_PREFIX/certs/default.crt && mv default.key $NGINX_PREFIX/certs/default.key
  # Then, just use the generated default.key and default.crt files.
+
+# nginx user without /home
+RUN useradd --no-create-home nginx
+
+RUN chown -R nginx $NGINX_PREFIX
 
 CMD ["forego", "start", "-r"]
