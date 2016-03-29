@@ -199,7 +199,17 @@ class HttpServices
   end
 
   def services_list(filters = {})
-    session.services.list(filters)['objects'].map {|data| Service.new(data, session) }
+    services_result = session.services.list(filters)
+    total_count = services_result['meta']['total_count']
+    limit = services_result['meta']['limit']
+    @services_list = services_result['objects'].map {|data| Service.new(data, session) }
+
+    if total_count > limit
+      remain_services_result = session.services.list(filters.merge({limit: (total_count - limit), offset: limit }))
+      @services_list = @services_list + remain_services_result['objects'].map {|data| Service.new(data, session) }
+    end
+
+    @services_list
   end
 
   def get_nodes(filters = {})
