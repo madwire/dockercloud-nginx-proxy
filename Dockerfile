@@ -1,5 +1,9 @@
-FROM nginx:1.9.0
+FROM nginx:1.9.14
 MAINTAINER Richard Adams richard@madwire.co.uk
+
+ENV NGINX_DEFAULT_CONF=/etc/nginx/conf.d/default.conf
+ENV NGINX_DEFAULT_SSL_CRT=/etc/nginx/certs/default.crt
+ENV NGINX_DEFAULT_SSL_KEY=/etc/nginx/certs/default.key
 
 # Install wget and install/updates certificates
 RUN apt-get update \
@@ -23,8 +27,6 @@ RUN wget -P /usr/local/bin https://godist.herokuapp.com/projects/ddollar/forego/
 
 # Install App dependancies
 RUN gem install faye-websocket --no-ri --no-rdoc && gem install tutum --no-ri --no-rdoc
-
-ENV NGINX_DEFAULT_CONF=/etc/nginx/conf.d/default.conf
 
 COPY . /app/
 WORKDIR /app/
