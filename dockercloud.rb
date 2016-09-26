@@ -79,6 +79,10 @@ class Container
     attributes['container_envvars'].find {|e| e['key'] == 'DOCKERCLOUD_NODE_FQDN'}['value']
   end
 
+  def client_max_body_size
+    attributes['container_envvars'].find {|e| e['key'] == 'NGINX_CLIENT_MAX_BODY_SIZE'}['value'] || '1m'
+  end
+
   def running?
     ['Starting', 'Running'].include?(attributes['state'])
   end
