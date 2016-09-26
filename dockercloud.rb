@@ -127,6 +127,10 @@ class Service
     @ssl ||= containers.first.ssl? rescue nil
   end
 
+  def client_max_body_size
+    @client_max_body_size ||= containers.first.client_max_body_size rescue "1m"
+  end
+
   def running?
     @state ||= begin
       ['Running', 'Partly running'].include?(attributes['state'])
