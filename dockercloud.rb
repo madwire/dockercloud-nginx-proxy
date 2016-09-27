@@ -71,6 +71,10 @@ class Container
     attributes['container_envvars'].find {|e| e['key'] == 'VIRTUAL_HOST' }['value']
   end
 
+  def port
+    attributes['container_envvars'].find {|e| e['key'] == 'VIRTUAL_PORT' }['value'] rescue '80'
+  end
+
   def ssl?
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
   end
