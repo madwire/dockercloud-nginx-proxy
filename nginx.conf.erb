@@ -49,7 +49,7 @@ server {
 <% if service.host %>
 upstream <%= service.name %> {
   <% service.containers.each do |container| %>
-  server <%= container.ip%>:80;
+  server <%= container.ip%>:<%= container.port %>;
   <% end %>
 }
 
