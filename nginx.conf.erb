@@ -47,7 +47,7 @@ server {
 
 <% @services.each do |service| %>
 <% if service.host %>
-upstream <%= service.name %> {
+upstream <%= service.id %> {
   <% service.containers.each do |container| %>
   server <%= container.ip%>:<%= container.port %>;
   <% end %>
@@ -78,7 +78,7 @@ server {
   add_header Strict-Transport-Security "max-age=31536000";
 
   location / {
-    proxy_pass http://<%= service.name %>;
+    proxy_pass http://<%= service.id %>;
   }
 }
 
@@ -88,7 +88,7 @@ server {
   server_name <%= service.host %>;
   client_max_body_size <%= service.client_max_body_size %>;
   location / {
-    proxy_pass http://<%= service.name %>;
+    proxy_pass http://<%= service.id %>;
   }
 }
 <% end %>
