@@ -185,16 +185,25 @@ class HttpServices
 
   attr_reader :session, :mode, :node
   def initialize(tutum_auth, mode = :none, node = nil)
-    @session = Tutum.new(tutum_auth: tutum_auth)
-    @mode = mode
-    @node = node
-    @services = get_services
+    begin
+      @session = Tutum.new(tutum_auth: tutum_auth)
+      @mode = mode
+      @node = node
+      @services = get_services
+    rescue RestClient::RequestFailed => e
+      LOGGER.info e.response
+      EventMachine::Timer.new(10) do
+        HttpServices.new(tutum_auth, @mode, @node).write_conf(ENV['NGINX_DEFAULT_CONF'])
+      end
+    end
   end
 
   def write_conf(file_path)
-    @nginx_conf ||= NginxConf.new()
-    @nginx_conf.write(@services, file_path)
-    LOGGER.info 'Writing new nginx config'
+    if @services
+      @nginx_conf ||= NginxConf.new()
+      @nginx_conf.write(@services, file_path)
+      LOGGER.info 'Writing new nginx config'
+    end
     self
   end
 
