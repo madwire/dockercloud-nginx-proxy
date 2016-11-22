@@ -71,6 +71,10 @@ class Container
     attributes['container_envvars'].find {|e| e['key'] == 'VIRTUAL_HOST' }['value']
   end
 
+  def port
+    attributes['container_envvars'].find {|e| e['key'] == 'VIRTUAL_PORT' }['value'] rescue '80'
+  end
+
   def ssl?
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
   end
@@ -181,16 +185,25 @@ class HttpServices
 
   attr_reader :session, :mode, :node
   def initialize(tutum_auth, mode = :none, node = nil)
-    @session = Tutum.new(tutum_auth: tutum_auth)
-    @mode = mode
-    @node = node
-    @services = get_services
+    begin
+      @session = Tutum.new(tutum_auth: tutum_auth)
+      @mode = mode
+      @node = node
+      @services = get_services
+    rescue RestClient::RequestFailed => e
+      LOGGER.info e.response
+      EventMachine::Timer.new(10) do
+        HttpServices.new(tutum_auth, @mode, @node).write_conf(ENV['NGINX_DEFAULT_CONF'])
+      end
+    end
   end
 
   def write_conf(file_path)
-    @nginx_conf ||= NginxConf.new()
-    @nginx_conf.write(@services, file_path)
-    LOGGER.info 'Writing new nginx config'
+    if @services
+      @nginx_conf ||= NginxConf.new()
+      @nginx_conf.write(@services, file_path)
+      LOGGER.info 'Writing new nginx config'
+    end
     self
   end
 
@@ -207,7 +220,17 @@ class HttpServices
   end
 
   def services_list(filters = {})
-    session.services.list(filters)['objects'].map {|data| Service.new(data, session) }
+    services_result = session.services.list(filters)
+    total_count = services_result['meta']['total_count']
+    limit = services_result['meta']['limit']
+    @services_list = services_result['objects'].map {|data| Service.new(data, session) }
+
+    if total_count > limit
+      remain_services_result = session.services.list(filters.merge({limit: (total_count - limit), offset: limit }))
+      @services_list = @services_list + remain_services_result['objects'].map {|data| Service.new(data, session) }
+    end
+
+    @services_list
   end
 
   def get_nodes(filters = {})

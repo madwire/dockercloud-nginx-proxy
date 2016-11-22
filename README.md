@@ -15,6 +15,7 @@ That's it - the proxy container will start querying Docker Cloud's API for an up
 These are the environment variables you add to web services you want to load-balance:
 
 - VIRTUAL_HOST: Domain host name, leave a space for multiple domains. e.g. `www.example.com example.com`
+- VIRTUAL_PORT: Optional. This will allow you to specify a port number that your process/app in your container will listen on. **You must still export your container on port 80 for your service to be classed as an http service**
 - FORCE_SSL: Optional. This will use a self-signed cert and redirect traffic to https, its perfect when married to external services like [cloudflare](https://www.cloudflare.com/)
 
 These are the environment variables you can add to the load-balance:
