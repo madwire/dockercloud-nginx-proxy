@@ -58,9 +58,12 @@ end
 class Container
   attr_reader :id, :attributes
 
-  def initialize(attributes)
+  attr_accessor :service
+
+  def initialize(service, attributes)
     @id = attributes['uuid']
     @attributes = attributes
+    @service = service
   end
 
   def ip
@@ -149,7 +152,7 @@ class Service
     @containers ||= begin
       attributes['containers'].map do |container_url|
         id = container_url.split("/").last
-        container = Container.new(session.containers.get(id))
+        container = Container.new(self, session.containers.get(id))
         if include_container? container
           container
         else
