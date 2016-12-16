@@ -1,3 +1,5 @@
 dockercloud_nginx_proxy:
   build: .
   env_file: .env
+  volumes:
+    - .:/app
