@@ -73,8 +73,8 @@ server {
         ssl_session_timeout 5m;
         ssl_session_cache shared:SSL:50m;
 
-        ssl_certificate <%= ENV['NGINX_DEFAULT_SSL_CRT'] %>;
-        ssl_certificate_key <%= ENV['NGINX_DEFAULT_SSL_KEY'] %>;
+        ssl_certificate <%= service.ssl_cert_path %>;
+        ssl_certificate_key <%= service.ssl_cert_key_path %>;
 
         add_header Strict-Transport-Security "max-age=31536000";
 

@@ -163,6 +163,14 @@ class Service
     @ssl ||= containers.first.ssl? rescue nil
   end
 
+  def ssl_cert_path
+    @ssl_cert_path ||= containers.first.ssl_cert_path rescue nil
+  end
+
+  def ssl_cert_key_path
+    @ssl_cert_key_path ||= containers.first.ssl_cert_key_path rescue nil
+  end
+
   def client_max_body_size
     @client_max_body_size ||= containers.first.client_max_body_size rescue "1m"
   end
