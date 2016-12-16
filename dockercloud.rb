@@ -64,6 +64,11 @@ class Container
     @id = attributes['uuid']
     @attributes = attributes
     @service = service
+
+    if ssl_cert && ssl_cert_key
+      File.write(ssl_cert_path, ssl_cert)
+      File.write(ssl_cert_key_path, ssl_cert_key)
+    end
   end
 
   def ip
@@ -80,6 +85,30 @@ class Container
 
   def ssl?
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
+  end
+
+  def ssl_cert
+    attributes['container_envvars'].find {|e| e['key'] == 'SSL_CERT' }['value'] rescue nil
+  end
+
+  def ssl_cert_path
+    if ssl_cert && ssl_cert_key
+      "/etc/nginx/certs/#{service.name}.crt"
+    else
+      ENV['NGINX_DEFAULT_SSL_CRT']
+    end
+  end
+
+  def ssl_cert_key
+    attributes['container_envvars'].find {|e| e['key'] == 'SSL_CERT_KEY' }['value'] rescue nil
+  end
+
+  def ssl_cert_key_path
+    if ssl_cert && ssl_cert_key
+      "/etc/nginx/certs/#{service.name}.key"
+    else
+      ENV['NGINX_DEFAULT_SSL_KEY']
+    end
   end
 
   def node
