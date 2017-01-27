@@ -58,9 +58,17 @@ end
 class Container
   attr_reader :id, :attributes
 
-  def initialize(attributes)
+  attr_accessor :service
+
+  def initialize(service, attributes)
     @id = attributes['uuid']
     @attributes = attributes
+    @service = service
+
+    if ssl_cert && ssl_cert_key
+      File.write(ssl_cert_path, ssl_cert)
+      File.write(ssl_cert_key_path, ssl_cert_key)
+    end
   end
 
   def ip
@@ -77,6 +85,30 @@ class Container
 
   def ssl?
     !!attributes['container_envvars'].find {|e| e['key'] == 'FORCE_SSL' }['value']
+  end
+
+  def ssl_cert
+    attributes['container_envvars'].find {|e| e['key'] == 'SSL_CERT' }['value'] rescue nil
+  end
+
+  def ssl_cert_path
+    if ssl_cert && ssl_cert_key
+      "/etc/nginx/certs/#{service.name}.crt"
+    else
+      ENV['NGINX_DEFAULT_SSL_CRT']
+    end
+  end
+
+  def ssl_cert_key
+    attributes['container_envvars'].find {|e| e['key'] == 'SSL_CERT_KEY' }['value'] rescue nil
+  end
+
+  def ssl_cert_key_path
+    if ssl_cert && ssl_cert_key
+      "/etc/nginx/certs/#{service.name}.key"
+    else
+      ENV['NGINX_DEFAULT_SSL_KEY']
+    end
   end
 
   def node
@@ -131,6 +163,14 @@ class Service
     @ssl ||= containers.first.ssl? rescue nil
   end
 
+  def ssl_cert_path
+    @ssl_cert_path ||= containers.first.ssl_cert_path rescue nil
+  end
+
+  def ssl_cert_key_path
+    @ssl_cert_key_path ||= containers.first.ssl_cert_key_path rescue nil
+  end
+
   def client_max_body_size
     @client_max_body_size ||= containers.first.client_max_body_size rescue "1m"
   end
@@ -149,7 +189,7 @@ class Service
     @containers ||= begin
       attributes['containers'].map do |container_url|
         id = container_url.split("/").last
-        container = Container.new(session.containers.get(id))
+        container = Container.new(self, session.containers.get(id))
         if include_container? container
           container
         else
