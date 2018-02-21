@@ -1,4 +1,4 @@
-FROM nginx:1.9.14
+FROM nginx:1.13
 MAINTAINER Richard Adams richard@madwire.co.uk
 
 ENV NGINX_DEFAULT_CONF=/etc/nginx/conf.d/default.conf
