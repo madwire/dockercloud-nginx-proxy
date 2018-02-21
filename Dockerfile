@@ -32,13 +32,7 @@ COPY . /app/
 WORKDIR /app/
 
 # Generate Default Self-signed certificate
-RUN openssl genrsa -des3 -passout pass:x -out default.pass.key 2048 \
-  && openssl rsa -passin pass:x -in default.pass.key -out default.key \
-  && rm default.pass.key \
-  && openssl req -new -key default.key -out default.csr -subj "/C=UK/ST=State/L=local/O=OrgName/OU=Web/CN=example.com" \
-  && openssl x509 -req -days 365 -in default.csr -signkey default.key -out default.crt \
-  && mkdir -p /etc/nginx/certs/ \
-  && mv default.crt /etc/nginx/certs/default.crt && mv default.key /etc/nginx/certs/default.key
-  # Then, just use the generated default.key and default.crt files.
+RUN mkdir -p /etc/nginx/certs/ \
+  && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/certs/default.key -out /etc/nginx/certs/default.crt -subj "/C=UK/ST=State/L=local/O=OrgName/OU=Web/CN=example.com"
 
 CMD ["forego", "start", "-r"]
